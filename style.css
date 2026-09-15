@@ -1,0 +1,71 @@
+/* 余白と枠線を、指定した幅の中に含めます */
+* {
+  box-sizing: border-box;
+}
+
+/* ページ全体の基本設定 */
+body {
+  margin: 0;
+  padding: 24px 16px;
+  font-family: sans-serif;
+  color: #1f2937;
+  background-color: #f3f4f6;
+  text-align: center;
+}
+
+/* タイマーの表示領域 */
+main {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  background-color: #ffffff;
+  border-radius: 16px;
+}
+
+h1 {
+  font-size: 22px;
+}
+
+#status {
+  color: #4b5563;
+}
+
+/* JavaScriptで付けるクラスに合わせて色を変えます */
+#status.training {
+  color: #166534;
+}
+
+#status.rest {
+  color: #1d4ed8;
+}
+
+/* 種目名と残り時間を大きく表示 */
+#exercise {
+  font-size: 32px;
+}
+
+#time {
+  font-size: 80px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ボタンを縦に並べ、指で押しやすくします */
+button {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid #9ca3af;
+  border-radius: 8px;
+  font-size: 18px;
+  color: #1f2937;
+  background-color: #ffffff;
+  cursor: pointer;
+}
+
+#start {
+  color: #ffffff;
+  background-color: #166534;
+  border-color: #166534;
+}
