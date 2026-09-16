@@ -40,8 +40,23 @@ h1 {
 }
 
 /* 種目名と残り時間を大きく表示 */
+#exercise-image {
+  display: block;
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  margin: 16px auto 8px;
+}
+
+#exercise-image[hidden] {
+  display: none;
+}
+
 #exercise {
   font-size: 32px;
+  margin: 8px 0 16px;
 }
 
 #time {

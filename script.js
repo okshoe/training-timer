@@ -2,6 +2,7 @@
 const timeDisplay = document.getElementById("time");
 const statusDisplay = document.getElementById("status");
 const exerciseDisplay = document.getElementById("exercise");
+const exerciseImage = document.getElementById("exercise-image");
 const roundDisplay = document.getElementById("round");
 const startButton = document.getElementById("start");
 const pauseButton = document.getElementById("pause");
@@ -17,6 +18,15 @@ const exercises = [
   "デッドバグ"
 ];
 const trainingSeconds = 40;
+// 種目名と同じ順番で、対応する画像を並べます。
+const exerciseImages = [
+  "assets/squat.svg",
+  "assets/wall-pushup.svg",
+  "assets/back-lunge.svg",
+  "assets/bird-dog.svg",
+  "assets/hip-bridge.svg",
+  "assets/dead-bug.svg"
+];
 const restSeconds = 20;
 const totalRounds = 2;
 
@@ -89,16 +99,25 @@ function playLongBeep() {
 
 // 種目・周回・残り時間の表示をまとめて更新します。
 function updateDisplay() {
+  let displayedIndex = exerciseIndex;
+  exerciseImage.hidden = false;
   if (isRest) {
     if (exerciseIndex === exercises.length - 1 && currentRound === totalRounds) {
       exerciseDisplay.textContent = "これでトレーニング終了";
+      exerciseImage.hidden = true;
     } else {
       // 最後の種目の次は、次の周のスクワットに戻ります。
       const nextIndex = (exerciseIndex + 1) % exercises.length;
+      displayedIndex = nextIndex;
       exerciseDisplay.textContent = "次は、" + exercises[nextIndex];
     }
   } else {
     exerciseDisplay.textContent = exercises[exerciseIndex];
+  }
+  // 休憩中は、次の種目名と画像をそろえて表示します。
+  const imagePath = exerciseImages[displayedIndex];
+  if (exerciseImage.getAttribute("src") !== imagePath) {
+    exerciseImage.setAttribute("src", imagePath);
   }
   roundDisplay.textContent = currentRound + "周目 / " + totalRounds + "周";
   timeDisplay.textContent = remainingTime;
