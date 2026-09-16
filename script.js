@@ -89,7 +89,17 @@ function playLongBeep() {
 
 // 種目・周回・残り時間の表示をまとめて更新します。
 function updateDisplay() {
-  exerciseDisplay.textContent = exercises[exerciseIndex];
+  if (isRest) {
+    if (exerciseIndex === exercises.length - 1 && currentRound === totalRounds) {
+      exerciseDisplay.textContent = "これでトレーニング終了";
+    } else {
+      // 最後の種目の次は、次の周のスクワットに戻ります。
+      const nextIndex = (exerciseIndex + 1) % exercises.length;
+      exerciseDisplay.textContent = "次は、" + exercises[nextIndex];
+    }
+  } else {
+    exerciseDisplay.textContent = exercises[exerciseIndex];
+  }
   roundDisplay.textContent = currentRound + "周目 / " + totalRounds + "周";
   timeDisplay.textContent = remainingTime;
 }
