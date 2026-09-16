@@ -7,6 +7,36 @@ const roundDisplay = document.getElementById("round");
 const startButton = document.getElementById("start");
 const pauseButton = document.getElementById("pause");
 const resetButton = document.getElementById("reset");
+let screenLock = null;
+let screenLockPending = false;
+
+// このページを表示している間、自動消灯を抑えます。
+async function keepScreenAwake() {
+  if (!("wakeLock" in navigator)) {
+    return;
+  }
+  if (document.hidden || screenLockPending || (screenLock && !screenLock.released)) {
+    return;
+  }
+
+  screenLockPending = true;
+  try {
+    const lock = await navigator.wakeLock.request("screen");
+    screenLock = lock;
+    lock.addEventListener("release", function () {
+      if (screenLock === lock) {
+        screenLock = null;
+      }
+    });
+    if (document.hidden) {
+      await lock.release();
+    }
+  } catch (error) {
+    // 端末が点灯維持を許可しない場合も、タイマーはそのまま動かします。
+  } finally {
+    screenLockPending = false;
+  }
+}
 
 // 配列には、種目を実行する順番で並べます。
 const exercises = [
@@ -28,16 +58,18 @@ const exerciseImages = [
   "assets/dead-bug.svg"
 ];
 const restSeconds = 20;
+const preparationSeconds = 10;
 const totalRounds = 2;
 
 // 配列の番号は0から始まるので、0がスクワットです。
 let exerciseIndex = 0;
 let currentRound = 1;
 let isRest = false;
-let remainingTime = trainingSeconds;
+let isPreparing = true;
+let remainingTime = preparationSeconds;
 let timerId = null;
 // 時刻の計算にはミリ秒を使います（1000ミリ秒 = 1秒）。
-let remainingMilliseconds = trainingSeconds * 1000;
+let remainingMilliseconds = preparationSeconds * 1000;
 let phaseEndTime = null;
 let lastCueSecond = null;
 let audioContext = null;
@@ -90,20 +122,29 @@ function playSound(duration, frequency) {
 }
 
 function playShortBeep() {
-  playSound(0.12, 880);
+  // 開始予告は高い音、終了予告は低い音にします。
+  const beforeTraining = isPreparing || (isRest
+    && !(currentRound === totalRounds && exerciseIndex === exercises.length - 1));
+  playSound(0.12, beforeTraining ? 880 : 440);
 }
 
-function playLongBeep() {
+function playStartBeep() {
   playSound(0.5, 1047);
+}
+
+function playEndBeep() {
+  playSound(0.5, 330);
 }
 
 // 種目・周回・残り時間の表示をまとめて更新します。
 function updateDisplay() {
   let displayedIndex = exerciseIndex;
   exerciseImage.hidden = false;
-  if (isRest) {
+  if (isPreparing) {
+    exerciseDisplay.textContent = "最初は、" + exercises[0];
+  } else if (isRest) {
     if (exerciseIndex === exercises.length - 1 && currentRound === totalRounds) {
-      exerciseDisplay.textContent = "これでトレーニング終了";
+      exerciseDisplay.textContent = "おつかれさまでした！";
       exerciseImage.hidden = true;
     } else {
       // 最後の種目の次は、次の周のスクワットに戻ります。
@@ -124,7 +165,10 @@ function updateDisplay() {
 }
 
 function showPhase() {
-  if (isRest) {
+  if (isPreparing) {
+    statusDisplay.textContent = "準備中";
+    statusDisplay.className = "";
+  } else if (isRest) {
     statusDisplay.textContent = "休憩中";
     statusDisplay.className = "rest";
   } else {
@@ -134,16 +178,19 @@ function showPhase() {
 }
 
 // 0秒になったとき、休憩または次の種目へ進みます。
-function nextPhase() {
-  // 区間の終了を長い音で知らせます。
-  playLongBeep();
-
-  if (!isRest) {
+function nextPhase(announce = true) {
+  if (isPreparing) {
+    isPreparing = false;
+    remainingTime = trainingSeconds;
+    if (announce) playStartBeep();
+  } else if (!isRest) {
     isRest = true;
     remainingTime = restSeconds;
+    if (announce) playEndBeep();
   } else {
     // 最後の種目の休憩まで終わったら、タイマーを止めます。
     if (exerciseIndex === exercises.length - 1 && currentRound === totalRounds) {
+      if (announce) playEndBeep();
       clearInterval(timerId);
       timerId = null;
       phaseEndTime = null;
@@ -159,6 +206,7 @@ function nextPhase() {
     }
     isRest = false;
     remainingTime = trainingSeconds;
+    if (announce) playStartBeep();
   }
 
   lastCueSecond = null;
@@ -175,7 +223,8 @@ function refreshTimer(now = Date.now()) {
   while (now >= phaseEndTime) {
     remainingTime = 0;
     remainingMilliseconds = 0;
-    nextPhase();
+    // 画面を長く離れた場合、過去の合図をまとめて鳴らしません。
+    nextPhase(now - phaseEndTime < 1000);
     if (timerId === null) {
       updateDisplay();
       return;
@@ -195,15 +244,14 @@ function refreshTimer(now = Date.now()) {
 }
 
 function startTimer() {
+  keepScreenAwake();
   // 動作中や終了後に押されても、新しいタイマーを作りません。
   if (timerId !== null || remainingTime === 0) {
     return;
   }
 
   // スタートのクリックは、スマートフォンで音を鳴らす許可にもなります。
-  const soundReady = prepareSound();
-  const isBeginning = currentRound === 1 && exerciseIndex === 0 && !isRest
-    && remainingMilliseconds === trainingSeconds * 1000;
+  prepareSound();
   showPhase();
   phaseEndTime = Date.now() + remainingMilliseconds;
   // 画面を更新するきっかけです。経過時間は時刻の差から求めます。
@@ -211,15 +259,6 @@ function startTimer() {
     refreshTimer();
   }, 200);
 
-  const startedTimerId = timerId;
-  soundReady.then(function (ready) {
-    // 準備中に停止・リセットした場合や、遅れて準備できた場合は鳴らしません。
-    if (ready && isBeginning && timerId === startedTimerId
-        && !isRest && exerciseIndex === 0 && currentRound === 1
-        && phaseEndTime - Date.now() > (trainingSeconds - 1) * 1000) {
-      playLongBeep();
-    }
-  });
 }
 
 function pauseTimer() {
@@ -242,8 +281,9 @@ function resetTimer() {
   exerciseIndex = 0;
   currentRound = 1;
   isRest = false;
-  remainingTime = trainingSeconds;
-  remainingMilliseconds = trainingSeconds * 1000;
+  isPreparing = true;
+  remainingTime = preparationSeconds;
+  remainingMilliseconds = preparationSeconds * 1000;
   phaseEndTime = null;
   lastCueSecond = null;
   updateDisplay();
@@ -260,7 +300,9 @@ resetButton.addEventListener("click", resetTimer);
 document.addEventListener("visibilitychange", function () {
   if (!document.hidden) {
     refreshTimer();
+    keepScreenAwake();
   }
 });
 
 updateDisplay();
+keepScreenAwake();
