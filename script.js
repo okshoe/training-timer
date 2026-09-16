@@ -33,18 +33,25 @@ let lastCueSecond = null;
 let audioContext = null;
 
 // ブラウザ標準のWeb Audio APIで、音声ファイルなしに通知音を作ります。
-function prepareSound() {
+async function prepareSound() {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
 
   if (!AudioContext) {
-    return;
+    return false;
   }
 
-  if (audioContext === null) {
-    audioContext = new AudioContext();
-  }
+  try {
+    if (audioContext === null) {
+      audioContext = new AudioContext();
+    }
 
-  audioContext.resume();
+    // resume()は準備が終わるまで時間がかかるため、完了を待ちます。
+    await audioContext.resume();
+    return audioContext.state === "running";
+  } catch (error) {
+    console.warn("音を有効にできませんでした。", error);
+    return false;
+  }
 }
 
 function playSound(duration, frequency) {
@@ -57,12 +64,19 @@ function playSound(duration, frequency) {
   const startTime = audioContext.currentTime;
 
   oscillator.frequency.value = frequency;
-  gain.gain.setValueAtTime(0.15, startTime);
+  // 音量を短時間で上げ、最後まで保ってから下げます。
+  gain.gain.setValueAtTime(0.001, startTime);
+  gain.gain.linearRampToValueAtTime(0.2, startTime + 0.01);
+  gain.gain.setValueAtTime(0.2, startTime + duration - 0.02);
   gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
   oscillator.connect(gain);
   gain.connect(audioContext.destination);
   oscillator.start(startTime);
   oscillator.stop(startTime + duration);
+  oscillator.onended = function () {
+    oscillator.disconnect();
+    gain.disconnect();
+  };
 }
 
 function playShortBeep() {
@@ -158,16 +172,25 @@ function startTimer() {
   }
 
   // スタートのクリックは、スマートフォンで音を鳴らす許可にもなります。
-  prepareSound();
+  const soundReady = prepareSound();
+  const isBeginning = currentRound === 1 && exerciseIndex === 0 && !isRest
+    && remainingMilliseconds === trainingSeconds * 1000;
   showPhase();
-  if (phaseEndTime === null && remainingMilliseconds === trainingSeconds * 1000) {
-    playLongBeep();
-  }
   phaseEndTime = Date.now() + remainingMilliseconds;
   // 画面を更新するきっかけです。経過時間は時刻の差から求めます。
   timerId = setInterval(function () {
     refreshTimer();
   }, 200);
+
+  const startedTimerId = timerId;
+  soundReady.then(function (ready) {
+    // 準備中に停止・リセットした場合や、遅れて準備できた場合は鳴らしません。
+    if (ready && isBeginning && timerId === startedTimerId
+        && !isRest && exerciseIndex === 0 && currentRound === 1
+        && phaseEndTime - Date.now() > (trainingSeconds - 1) * 1000) {
+      playLongBeep();
+    }
+  });
 }
 
 function pauseTimer() {
