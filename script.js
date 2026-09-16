@@ -29,6 +29,49 @@ let timerId = null;
 // 時刻の計算にはミリ秒を使います（1000ミリ秒 = 1秒）。
 let remainingMilliseconds = trainingSeconds * 1000;
 let phaseEndTime = null;
+let lastCueSecond = null;
+let audioContext = null;
+
+// ブラウザ標準のWeb Audio APIで、音声ファイルなしに通知音を作ります。
+function prepareSound() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContext) {
+    return;
+  }
+
+  if (audioContext === null) {
+    audioContext = new AudioContext();
+  }
+
+  audioContext.resume();
+}
+
+function playSound(duration, frequency) {
+  if (audioContext === null || audioContext.state !== "running") {
+    return;
+  }
+
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  const startTime = audioContext.currentTime;
+
+  oscillator.frequency.value = frequency;
+  gain.gain.setValueAtTime(0.15, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration);
+}
+
+function playShortBeep() {
+  playSound(0.12, 880);
+}
+
+function playLongBeep() {
+  playSound(0.5, 1047);
+}
 
 // 種目・周回・残り時間の表示をまとめて更新します。
 function updateDisplay() {
@@ -49,6 +92,9 @@ function showPhase() {
 
 // 0秒になったとき、休憩または次の種目へ進みます。
 function nextPhase() {
+  // 区間の終了を長い音で知らせます。
+  playLongBeep();
+
   if (!isRest) {
     isRest = true;
     remainingTime = restSeconds;
@@ -72,6 +118,7 @@ function nextPhase() {
     remainingTime = trainingSeconds;
   }
 
+  lastCueSecond = null;
   showPhase();
 }
 
@@ -96,6 +143,11 @@ function refreshTimer(now = Date.now()) {
 
   remainingMilliseconds = phaseEndTime - now;
   remainingTime = Math.ceil(remainingMilliseconds / 1000);
+  // 3、2、1秒の表示に変わったときだけ、短い音を一度鳴らします。
+  if (remainingTime >= 1 && remainingTime <= 3 && remainingTime !== lastCueSecond) {
+    playShortBeep();
+    lastCueSecond = remainingTime;
+  }
   updateDisplay();
 }
 
@@ -105,7 +157,12 @@ function startTimer() {
     return;
   }
 
+  // スタートのクリックは、スマートフォンで音を鳴らす許可にもなります。
+  prepareSound();
   showPhase();
+  if (phaseEndTime === null && remainingMilliseconds === trainingSeconds * 1000) {
+    playLongBeep();
+  }
   phaseEndTime = Date.now() + remainingMilliseconds;
   // 画面を更新するきっかけです。経過時間は時刻の差から求めます。
   timerId = setInterval(function () {
@@ -136,6 +193,7 @@ function resetTimer() {
   remainingTime = trainingSeconds;
   remainingMilliseconds = trainingSeconds * 1000;
   phaseEndTime = null;
+  lastCueSecond = null;
   updateDisplay();
   statusDisplay.textContent = "開始前";
   statusDisplay.className = "";
