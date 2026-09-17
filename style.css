@@ -1,86 +1,45 @@
-/* 余白と枠線を、指定した幅の中に含めます */
-* {
-  box-sizing: border-box;
-}
-
-/* ページ全体の基本設定 */
+/* 状態ごとの色を変数にまとめます。 */
+:root { --page: #f0ede5; --card: #fffcf5; --accent: #706746; --soft: #e9e3d4; --ink: #343c33; }
+body[data-phase="training"] { --page: #edd9cb; --card: #fff5ec; --accent: #9b4f36; --soft: #eed8c9; }
+body[data-phase="rest"] { --page: #d6e2d4; --card: #f3f8ef; --accent: #42684e; --soft: #dce7d7; }
+* { box-sizing: border-box; }
 body {
   margin: 0;
-  padding: 24px 16px;
-  font-family: sans-serif;
-  color: #1f2937;
-  background-color: #f3f4f6;
+  padding: 28px 16px;
+  font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", sans-serif;
+  color: var(--ink);
+  background: var(--page);
   text-align: center;
+  transition: background-color 0.4s;
 }
-
-/* タイマーの表示領域 */
 main {
-  max-width: 400px;
+  max-width: 440px;
   margin: 0 auto;
-  padding: 24px 16px;
-  background-color: #ffffff;
-  border-radius: 16px;
+  padding: 28px;
+  background: var(--card);
+  border: 1px solid #ffffff90;
+  border-radius: 32px;
+  box-shadow: 0 16px 48px #37412e12;
+  transition: background-color 0.4s;
 }
-
-h1 {
-  font-size: 22px;
-}
-
-#status {
-  color: #4b5563;
-}
-
-/* JavaScriptで付けるクラスに合わせて色を変えます */
-#status.training {
-  color: #166534;
-}
-
-#status.rest {
-  color: #1d4ed8;
-}
-
-/* 種目名と残り時間を大きく表示 */
-#exercise-image {
-  display: block;
-  width: 240px;
-  max-width: 100%;
-  height: auto;
-  aspect-ratio: 1;
-  object-fit: contain;
-  margin: 16px auto 8px;
-}
-
-#exercise-image[hidden] {
-  display: none;
-}
-
-#exercise {
-  font-size: 32px;
-  margin: 8px 0 16px;
-}
-
-#time {
-  font-size: 80px;
-  font-weight: bold;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ボタンを縦に並べ、指で押しやすくします */
-button {
-  display: block;
-  width: 100%;
-  margin-top: 12px;
-  padding: 16px;
-  border: 1px solid #9ca3af;
-  border-radius: 8px;
-  font-size: 18px;
-  color: #1f2937;
-  background-color: #ffffff;
-  cursor: pointer;
-}
-
-#start {
-  color: #ffffff;
-  background-color: #166534;
-  border-color: #166534;
-}
+h1 { margin: 0; font-size: 21px; letter-spacing: 0.04em; }
+.session-info { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 22px; }
+#status { margin: 0; padding: 8px 14px; border-radius: 99px; font-size: 13px; font-weight: bold; background: var(--soft); color: var(--accent); }
+#round { margin: 0; font-size: 13px; font-weight: bold; color: #596052; }
+#exercise-image { display: block; width: 240px; max-width: 100%; height: auto; aspect-ratio: 1; object-fit: contain; margin: 12px auto 0; }
+#exercise-image[hidden] { display: none; }
+#exercise { margin: 8px 0 20px; font-size: clamp(22px, 6vw, 28px); line-height: 1.5; }
+/* 残り時間の割合で色の付く角度を変えます。 */
+.timer-ring { --progress: 360deg; width: 176px; height: 176px; margin: 0 auto 24px; padding: 7px; border-radius: 50%; background: conic-gradient(var(--accent) var(--progress), var(--soft) 0); }
+.timer-face { height: 100%; border-radius: 50%; background: var(--card); display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.timer-label, .timer-unit { font-size: 13px; color: #596052; }
+#time { font-size: 66px; font-weight: 700; line-height: 1.12; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
+button { width: 100%; min-height: 52px; padding: 14px; border: 1px solid var(--soft); border-radius: 16px; font: inherit; font-size: 15px; font-weight: bold; color: var(--ink); background: var(--card); cursor: pointer; touch-action: manipulation; }
+button:hover { filter: brightness(0.96); }
+button:active { transform: translateY(1px); }
+button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+#start { background: var(--accent); color: #fff; border-color: var(--accent); }
+.secondary-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.session-note { margin: 20px 0 0; font-size: 13px; line-height: 1.6; color: #596052; }
+@media (max-width: 480px) { body { padding: 12px; } main { padding: 22px 18px; border-radius: 26px; } }
+@media (prefers-reduced-motion: reduce) { body, main { transition: none; } }

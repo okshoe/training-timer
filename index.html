@@ -3,21 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>トレーニングタイマー</title>
+  <title>Motion Loop</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main>
-    <h1>トレーニングタイマー</h1>
-    <p id="round">1周目 / 2周</p>
-    <p id="status">開始前</p>
+    <header>
+      <h1>Motion Loop</h1>
+      <div class="session-info">
+        <p id="status">開始前</p>
+        <p id="round">1 / 2周</p>
+      </div>
+    </header>
     <img id="exercise-image" src="assets/squat.svg" alt="" width="240" height="240">
     <h2 id="exercise">最初は、スクワット</h2>
-    <p><span id="time">10</span>秒</p>
+    <div class="timer-ring" id="timer-ring">
+      <div class="timer-face"><span class="timer-label">残り時間</span><span id="time">10</span><span class="timer-unit">秒</span></div>
+    </div>
 
     <button id="start" type="button">スタート</button>
-    <button id="pause" type="button">一時停止</button>
-    <button id="reset" type="button">リセット</button>
+    <div class="secondary-actions">
+      <button id="pause" type="button">一時停止</button>
+      <button id="reset" type="button">リセット</button>
+    </div>
+    <p class="session-note" id="session-note"></p>
   </main>
   <script src="script.js"></script>
 </body>

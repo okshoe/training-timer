@@ -7,6 +7,8 @@ const roundDisplay = document.getElementById("round");
 const startButton = document.getElementById("start");
 const pauseButton = document.getElementById("pause");
 const resetButton = document.getElementById("reset");
+const timerRing = document.getElementById("timer-ring");
+const sessionNote = document.getElementById("session-note");
 let screenLock = null;
 let screenLockPending = false;
 
@@ -96,14 +98,14 @@ async function prepareSound() {
   }
 }
 
-function playSound(duration, frequency) {
+function playSound(duration, frequency, delay = 0) {
   if (audioContext === null || audioContext.state !== "running") {
     return;
   }
 
   const oscillator = audioContext.createOscillator();
   const gain = audioContext.createGain();
-  const startTime = audioContext.currentTime;
+  const startTime = audioContext.currentTime + delay;
 
   oscillator.frequency.value = frequency;
   // 音量を短時間で上げ、最後まで保ってから下げます。
@@ -122,10 +124,10 @@ function playSound(duration, frequency) {
 }
 
 function playShortBeep() {
-  // 開始予告は高い音、終了予告は低い音にします。
+  // 終了予告も、スマートフォンで聞こえやすい高さにします。
   const beforeTraining = isPreparing || (isRest
     && !(currentRound === totalRounds && exerciseIndex === exercises.length - 1));
-  playSound(0.12, beforeTraining ? 880 : 440);
+  playSound(0.12, beforeTraining ? 880 : 784);
 }
 
 function playStartBeep() {
@@ -133,11 +135,16 @@ function playStartBeep() {
 }
 
 function playEndBeep() {
-  playSound(0.5, 330);
+  // 開始の長音と区別できるよう、中高音を2回鳴らします。
+  playSound(0.16, 784);
+  playSound(0.16, 784, 0.24);
 }
 
 // 種目・周回・残り時間の表示をまとめて更新します。
 function updateDisplay() {
+  // 説明文も設定値から作り、時間や種目数を変えたときに追従させます。
+  sessionNote.textContent = exercises.length + "種目 · " + trainingSeconds
+    + "秒トレーニング / " + restSeconds + "秒休憩 · " + totalRounds + "周";
   let displayedIndex = exerciseIndex;
   exerciseImage.hidden = false;
   if (isPreparing) {
@@ -160,11 +167,14 @@ function updateDisplay() {
   if (exerciseImage.getAttribute("src") !== imagePath) {
     exerciseImage.setAttribute("src", imagePath);
   }
-  roundDisplay.textContent = currentRound + "周目 / " + totalRounds + "周";
+  roundDisplay.textContent = currentRound + " / " + totalRounds + "周";
   timeDisplay.textContent = remainingTime;
+  const phaseSeconds = isPreparing ? preparationSeconds : (isRest ? restSeconds : trainingSeconds);
+  timerRing.style.setProperty("--progress", (remainingTime / phaseSeconds * 360) + "deg");
 }
 
 function showPhase() {
+  document.body.dataset.phase = isPreparing ? "preparing" : (isRest ? "rest" : "training");
   if (isPreparing) {
     statusDisplay.textContent = "準備中";
     statusDisplay.className = "";
@@ -195,6 +205,7 @@ function nextPhase(announce = true) {
       timerId = null;
       phaseEndTime = null;
       statusDisplay.textContent = "すべて終了！";
+      document.body.dataset.phase = "finished";
       statusDisplay.className = "";
       return;
     }
@@ -288,6 +299,7 @@ function resetTimer() {
   lastCueSecond = null;
   updateDisplay();
   statusDisplay.textContent = "開始前";
+  document.body.dataset.phase = "idle";
   statusDisplay.className = "";
 }
 
