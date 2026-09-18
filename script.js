@@ -61,7 +61,40 @@ const exerciseImages = [
 ];
 const restSeconds = 20;
 const preparationSeconds = 10;
-const totalRounds = 2;
+let totalRounds = 2;
+let illustration = "male";
+let settingsLocked = false;
+const settingButtons = document.querySelectorAll(".choices button");
+
+// 保存が使えない環境でも、初期値でそのまま動作します。
+try {
+  if (localStorage.getItem("motion-loop-rounds") === "3") totalRounds = 3;
+  if (localStorage.getItem("motion-loop-illustration") === "female") illustration = "female";
+} catch (error) {}
+
+function updateSettings() {
+  settingButtons.forEach(function (button) {
+    const selected = button.dataset.rounds
+      ? Number(button.dataset.rounds) === totalRounds
+      : button.dataset.illustration === illustration;
+    button.setAttribute("aria-pressed", String(selected));
+    button.disabled = settingsLocked;
+  });
+}
+
+settingButtons.forEach(function (button) {
+  button.addEventListener("click", function () {
+    if (settingsLocked) return;
+    if (button.dataset.rounds) totalRounds = Number(button.dataset.rounds);
+    if (button.dataset.illustration) illustration = button.dataset.illustration;
+    try {
+      localStorage.setItem("motion-loop-rounds", String(totalRounds));
+      localStorage.setItem("motion-loop-illustration", illustration);
+    } catch (error) {}
+    updateSettings();
+    updateDisplay();
+  });
+});
 
 // 配列の番号は0から始まるので、0がスクワットです。
 let exerciseIndex = 0;
@@ -174,7 +207,9 @@ function updateDisplay() {
     exerciseDisplay.textContent = exercises[exerciseIndex];
   }
   // 休憩中は、次の種目名と画像をそろえて表示します。
-  const imagePath = exerciseImages[displayedIndex];
+  const imagePath = illustration === "female"
+    ? exerciseImages[displayedIndex].replace(".svg", "_f.svg")
+    : exerciseImages[displayedIndex];
   if (exerciseImage.getAttribute("src") !== imagePath) {
     exerciseImage.setAttribute("src", imagePath);
   }
@@ -272,6 +307,8 @@ function startTimer() {
   }
 
   // スタートのクリックは、スマートフォンで音を鳴らす許可にもなります。
+  settingsLocked = true;
+  updateSettings();
   prepareSound();
   showPhase();
   phaseEndTime = Date.now() + remainingMilliseconds;
@@ -297,6 +334,8 @@ function pauseTimer() {
 }
 
 function resetTimer() {
+  settingsLocked = false;
+  updateSettings();
   clearInterval(timerId);
   timerId = null;
   exerciseIndex = 0;
@@ -326,5 +365,6 @@ document.addEventListener("visibilitychange", function () {
   }
 });
 
+updateSettings();
 updateDisplay();
 keepScreenAwake();

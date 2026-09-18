@@ -26,6 +26,16 @@
       <button id="pause" type="button">一時停止</button>
       <button id="reset" type="button">リセット</button>
     </div>
+    <div class="settings">
+      <div class="choices" role="group" aria-label="周回数">
+        <button type="button" data-rounds="2" aria-pressed="true">2周</button>
+        <button type="button" data-rounds="3" aria-pressed="false">3周</button>
+      </div>
+      <div class="choices" role="group" aria-label="イラスト">
+        <button type="button" data-illustration="male" aria-pressed="true">男性</button>
+        <button type="button" data-illustration="female" aria-pressed="false">女性</button>
+      </div>
+    </div>
     <p class="session-note" id="session-note"></p>
   </main>
   <script src="script.js"></script>
