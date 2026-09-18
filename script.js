@@ -140,6 +140,13 @@ function playEndBeep() {
   playSound(0.16, 784, 0.24);
 }
 
+function playCompletionBeep() {
+  // 全種目の終了は、聞き取りやすい長音3回で知らせます。
+  for (let i = 0; i < 3; i++) {
+    playSound(0.4, 1047, i * 0.55);
+  }
+}
+
 // 種目・周回・残り時間の表示をまとめて更新します。
 function updateDisplay() {
   // 説明文も設定値から作り、時間や種目数を変えたときに追従させます。
@@ -147,7 +154,11 @@ function updateDisplay() {
     + "秒トレーニング / " + restSeconds + "秒休憩 · " + totalRounds + "周";
   let displayedIndex = exerciseIndex;
   exerciseImage.hidden = false;
-  if (isPreparing) {
+  if (remainingTime === 0 && !isPreparing && !isRest
+    && currentRound === totalRounds && exerciseIndex === exercises.length - 1) {
+    exerciseDisplay.textContent = "おつかれさまでした！";
+    exerciseImage.hidden = true;
+  } else if (isPreparing) {
     exerciseDisplay.textContent = "最初は、" + exercises[0];
   } else if (isRest) {
     if (exerciseIndex === exercises.length - 1 && currentRound === totalRounds) {
@@ -194,13 +205,9 @@ function nextPhase(announce = true) {
     remainingTime = trainingSeconds;
     if (announce) playStartBeep();
   } else if (!isRest) {
-    isRest = true;
-    remainingTime = restSeconds;
-    if (announce) playEndBeep();
-  } else {
-    // 最後の種目の休憩まで終わったら、タイマーを止めます。
+    // 最後のトレーニングが終わったら、休憩を入れずに終了します。
     if (exerciseIndex === exercises.length - 1 && currentRound === totalRounds) {
-      if (announce) playEndBeep();
+      if (announce) playCompletionBeep();
       clearInterval(timerId);
       timerId = null;
       phaseEndTime = null;
@@ -209,7 +216,10 @@ function nextPhase(announce = true) {
       statusDisplay.className = "";
       return;
     }
-
+    isRest = true;
+    remainingTime = restSeconds;
+    if (announce) playEndBeep();
+  } else {
     exerciseIndex = exerciseIndex + 1;
     if (exerciseIndex === exercises.length) {
       exerciseIndex = 0;
