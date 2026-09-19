@@ -41,24 +41,109 @@ async function keepScreenAwake() {
 }
 
 // 配列には、種目を実行する順番で並べます。
-const exercises = [
+const exerciseNames = [
   "スクワット",
   "壁腕立て",
   "バックランジ",
+  "サイドランジ",
   "バードドッグ",
   "ヒップリフト",
-  "デッドバグ"
+  "デッドバグ",
+  "サイドプランク"
 ];
 let trainingSeconds = 40;
 // 種目名と同じ順番で、対応する画像を並べます。
-const exerciseImages = [
+const allExerciseImages = [
   "assets/squat.svg",
   "assets/wall-pushup.svg",
   "assets/back-lunge.svg",
+  "assets/side-lunge.svg",
   "assets/bird-dog.svg",
   "assets/hip-bridge.svg",
-  "assets/dead-bug.svg"
+  "assets/dead-bug.svg",
+  "assets/side-plank.svg"
 ];
+const catalog = exerciseNames.map((name, index) => ({
+  id: allExerciseImages[index].split("/").pop().replace(".svg", ""),
+  name, image: allExerciseImages[index]
+}));
+// IDで保存すると、種目名と画像を一緒に並べ替えられます。
+let exercisePlan = catalog.map(item => ({ id: item.id, enabled: true }));
+try {
+  const saved = JSON.parse(localStorage.getItem("motion-loop-exercises"));
+  if (Array.isArray(saved)) {
+    const valid = saved.filter((item, index) => item && typeof item.enabled === "boolean"
+      && catalog.some(entry => entry.id === item.id)
+      && saved.findIndex(entry => entry && entry.id === item.id) === index);
+    if (valid.some(item => item.enabled)) {
+      exercisePlan = valid.concat(catalog.filter(item => !valid.some(entry => entry.id === item.id))
+        .map(item => ({ id: item.id, enabled: false })));
+    }
+  }
+} catch (error) {}
+let exercises = [];
+let exerciseImages = [];
+function applyExercisePlan() {
+  const selected = exercisePlan.filter(item => item.enabled)
+    .map(item => catalog.find(entry => entry.id === item.id));
+  exercises = selected.map(item => item.name);
+  exerciseImages = selected.map(item => item.image);
+}
+applyExercisePlan();
+
+function changeExercise(id, action) {
+  if (settingsLocked) return;
+  const index = exercisePlan.findIndex(item => item.id === id);
+  if (index < 0) return;
+  if (action === "toggle") {
+    if (exercisePlan[index].enabled && exercises.length === 1) return;
+    exercisePlan[index].enabled = !exercisePlan[index].enabled;
+  } else {
+    const next = index + (action === "up" ? -1 : 1);
+    if (next < 0 || next >= exercisePlan.length) return;
+    [exercisePlan[index], exercisePlan[next]] = [exercisePlan[next], exercisePlan[index]];
+  }
+  applyExercisePlan();
+  try { localStorage.setItem("motion-loop-exercises", JSON.stringify(exercisePlan)); } catch (error) {}
+  updateSettings();
+  updateDisplay();
+  const row = document.getElementById("plan-" + id);
+  const control = row.querySelector('[data-action="' + action + '"]');
+  // 並べ替えで端に着いても、キーボードの操作位置を保ちます。
+  (control.disabled ? row : control).focus();
+}
+
+function renderExerciseSettings() {
+  const list = document.getElementById("exercise-list");
+  list.replaceChildren();
+  exercisePlan.forEach((item, index) => {
+    const exercise = catalog.find(entry => entry.id === item.id);
+    const row = document.createElement("li");
+    row.id = "plan-" + item.id;
+    row.tabIndex = -1;
+    const label = document.createElement("label");
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.dataset.action = "toggle";
+    check.checked = item.enabled;
+    check.disabled = settingsLocked || (item.enabled && exercises.length === 1);
+    check.addEventListener("change", () => changeExercise(item.id, "toggle"));
+    label.append(check, document.createTextNode(exercise.name));
+    row.append(label);
+    for (const [action, symbol, direction] of [["up", "↑", "上"], ["down", "↓", "下"]]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = symbol;
+      button.dataset.action = action;
+      button.setAttribute("aria-label", exercise.name + "を" + direction + "へ移動");
+      button.disabled = settingsLocked || (action === "up" ? index === 0 : index === exercisePlan.length - 1);
+      button.addEventListener("click", () => changeExercise(item.id, action));
+      row.append(button);
+    }
+    list.append(row);
+  });
+}
+
 let restSeconds = 20;
 const preparationSeconds = 10;
 let totalRounds = 2;
@@ -84,6 +169,7 @@ try {
 } catch (error) {}
 
 function updateSettings() {
+  renderExerciseSettings();
   document.getElementById("settings-help").textContent = settingsLocked
     ? "変更するにはタイマーをリセットしてください。"
     : "設定は自動で保存されます。";
@@ -117,7 +203,7 @@ settingButtons.forEach(function (button) {
   });
 });
 
-// 配列の番号は0から始まるので、0がスクワットです。
+// 配列の番号は0から始まり、0が選んだ最初の種目です。
 let exerciseIndex = 0;
 let currentRound = 1;
 let isRest = false;
@@ -128,6 +214,7 @@ let timerId = null;
 let remainingMilliseconds = preparationSeconds * 1000;
 let phaseEndTime = null;
 let lastCueSecond = null;
+let midpointCuePlayed = false;
 let audioContext = null;
 
 // ブラウザ標準のWeb Audio APIで、音声ファイルなしに通知音を作ります。
@@ -194,6 +281,12 @@ function playEndBeep() {
   playSound(0.16, 784, 0.24);
 }
 
+function playMidpointBeep() {
+  // 左右の切り替えにも使えるよう、中間点で短く2回鳴らします。
+  playSound(0.08, 880);
+  playSound(0.08, 880, 0.16);
+}
+
 function playCompletionBeep() {
   // 全種目の終了は、聞き取りやすい長音3回で知らせます。
   for (let i = 0; i < 3; i++) {
@@ -219,7 +312,7 @@ function updateDisplay() {
       exerciseDisplay.textContent = "おつかれさまでした！";
       exerciseImage.hidden = true;
     } else {
-      // 最後の種目の次は、次の周のスクワットに戻ります。
+      // 最後の種目の次は、次の周の最初の種目に戻ります。
       const nextIndex = (exerciseIndex + 1) % exercises.length;
       displayedIndex = nextIndex;
       exerciseDisplay.textContent = "次は、" + exercises[nextIndex];
@@ -287,6 +380,7 @@ function nextPhase(announce = true) {
   }
 
   lastCueSecond = null;
+  midpointCuePlayed = false;
   showPhase();
 }
 
@@ -312,6 +406,12 @@ function refreshTimer(now = Date.now()) {
 
   remainingMilliseconds = phaseEndTime - now;
   remainingTime = Math.ceil(remainingMilliseconds / 1000);
+  if (!isPreparing && !isRest && !midpointCuePlayed
+    && remainingMilliseconds <= trainingSeconds * 500) {
+    midpointCuePlayed = true;
+    // 画面を長く離れた場合、過ぎた中間点の音は鳴らしません。
+    if (trainingSeconds * 500 - remainingMilliseconds < 1000) playMidpointBeep();
+  }
   // 3、2、1秒の表示に変わったときだけ、短い音を一度鳴らします。
   if (remainingTime >= 1 && remainingTime <= 3 && remainingTime !== lastCueSecond) {
     playShortBeep();
@@ -367,6 +467,7 @@ function resetTimer() {
   remainingMilliseconds = preparationSeconds * 1000;
   phaseEndTime = null;
   lastCueSecond = null;
+  midpointCuePlayed = false;
   updateDisplay();
   statusDisplay.textContent = "開始前";
   document.body.dataset.phase = "idle";
