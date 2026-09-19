@@ -1,6 +1,6 @@
 // 公開する内容を変更したら、このバージョンも変更します。
 const CACHE_PREFIX = "motion-loop-" + self.registration.scope;
-const CACHE_NAME = CACHE_PREFIX + "v3";
+const CACHE_NAME = CACHE_PREFIX + "v4";
 const exercises = ["squat", "wall-pushup", "back-lunge", "side-lunge",
   "bird-dog", "hip-bridge", "dead-bug", "side-plank"];
 const files = ["./", "index.html", "style.css", "script.js", "manifest.webmanifest",
