@@ -490,3 +490,11 @@ document.addEventListener("visibilitychange", function () {
 updateSettings();
 updateDisplay();
 keepScreenAwake();
+
+// ローカル開発では通常の読み込みを保ち、?pwa=1 を付けたときに試せます。
+if ("serviceWorker" in navigator && (location.hostname !== "localhost"
+  && location.hostname !== "127.0.0.1" || new URLSearchParams(location.search).has("pwa"))) {
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(error => {
+    console.warn("オフラインの準備ができませんでした。", error);
+  });
+}
