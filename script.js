@@ -49,7 +49,7 @@ const exercises = [
   "ヒップリフト",
   "デッドバグ"
 ];
-const trainingSeconds = 40;
+let trainingSeconds = 40;
 // 種目名と同じ順番で、対応する画像を並べます。
 const exerciseImages = [
   "assets/squat.svg",
@@ -59,22 +59,38 @@ const exerciseImages = [
   "assets/hip-bridge.svg",
   "assets/dead-bug.svg"
 ];
-const restSeconds = 20;
+let restSeconds = 20;
 const preparationSeconds = 10;
 let totalRounds = 2;
 let illustration = "male";
 let settingsLocked = false;
 const settingButtons = document.querySelectorAll(".choices button");
+const settingsDialog = document.getElementById("settings-dialog");
+document.getElementById("open-settings").addEventListener("click", function () {
+  settingsDialog.showModal();
+});
+document.getElementById("close-settings").addEventListener("click", function () {
+  settingsDialog.close();
+});
 
 // 保存が使えない環境でも、初期値でそのまま動作します。
 try {
+  if (localStorage.getItem("motion-loop-training") === "30") {
+    trainingSeconds = 30;
+    restSeconds = 30;
+  }
   if (localStorage.getItem("motion-loop-rounds") === "3") totalRounds = 3;
   if (localStorage.getItem("motion-loop-illustration") === "female") illustration = "female";
 } catch (error) {}
 
 function updateSettings() {
+  document.getElementById("settings-help").textContent = settingsLocked
+    ? "変更するにはタイマーをリセットしてください。"
+    : "設定は自動で保存されます。";
   settingButtons.forEach(function (button) {
-    const selected = button.dataset.rounds
+    const selected = button.dataset.training
+      ? Number(button.dataset.training) === trainingSeconds
+      : button.dataset.rounds
       ? Number(button.dataset.rounds) === totalRounds
       : button.dataset.illustration === illustration;
     button.setAttribute("aria-pressed", String(selected));
@@ -85,9 +101,14 @@ function updateSettings() {
 settingButtons.forEach(function (button) {
   button.addEventListener("click", function () {
     if (settingsLocked) return;
+    if (button.dataset.training) {
+      trainingSeconds = Number(button.dataset.training);
+      restSeconds = 60 - trainingSeconds;
+    }
     if (button.dataset.rounds) totalRounds = Number(button.dataset.rounds);
     if (button.dataset.illustration) illustration = button.dataset.illustration;
     try {
+      localStorage.setItem("motion-loop-training", String(trainingSeconds));
       localStorage.setItem("motion-loop-rounds", String(totalRounds));
       localStorage.setItem("motion-loop-illustration", illustration);
     } catch (error) {}

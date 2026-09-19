@@ -23,6 +23,15 @@ main {
   transition: background-color 0.4s;
 }
 h1 { margin: 0; font-size: 21px; letter-spacing: 0.04em; }
+.title-row { position: relative; display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 44px; }
+#open-settings, #close-settings { width: 44px; min-height: 44px; padding: 10px; border: none; background: transparent; color: var(--accent); display: grid; place-items: center; }
+#open-settings { position: absolute; right: 0; }
+#close-settings { font-size: 26px; }
+dialog { width: min(340px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 20px; border: 1px solid var(--soft); border-radius: 24px; background: var(--card); color: var(--ink); box-shadow: 0 16px 48px #37412e25; }
+dialog::backdrop { background: #343c3355; }
+.dialog-header { display: flex; align-items: center; justify-content: space-between; }
+.dialog-header h2 { margin: 0; font-size: 18px; }
+.settings-help { font-size: 12px; line-height: 1.6; color: #596052; }
 .session-info { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 22px; }
 #status { margin: 0; padding: 8px 14px; border-radius: 99px; font-size: 13px; font-weight: bold; background: var(--soft); color: var(--accent); }
 #round { margin: 0; font-size: 13px; font-weight: bold; color: #596052; }
