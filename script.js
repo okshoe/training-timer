@@ -213,6 +213,7 @@ let timerId = null;
 // 時刻の計算にはミリ秒を使います（1000ミリ秒 = 1秒）。
 let remainingMilliseconds = preparationSeconds * 1000;
 let phaseEndTime = null;
+let workoutSession = null;
 let lastCueSecond = null;
 let midpointCuePlayed = false;
 let audioContext = null;
@@ -351,11 +352,15 @@ function showPhase() {
 function nextPhase(announce = true) {
   if (isPreparing) {
     isPreparing = false;
+    // 準備時間を除き、最初の運動が始まった時刻を記録します。
+    workoutSession.startedAt = new Date(phaseEndTime).toISOString();
     remainingTime = trainingSeconds;
     if (announce) playStartBeep();
   } else if (!isRest) {
     // 最後のトレーニングが終わったら、休憩を入れずに終了します。
     if (exerciseIndex === exercises.length - 1 && currentRound === totalRounds) {
+      // 復帰時に日付をまたいでいても、実際の終了予定日の記録にします。
+      recordWorkoutCompletion(new Date(phaseEndTime));
       if (announce) playCompletionBeep();
       clearInterval(timerId);
       timerId = null;
@@ -428,6 +433,18 @@ function startTimer() {
   }
 
   // スタートのクリックは、スマートフォンで音を鳴らす許可にもなります。
+  if (!settingsLocked) {
+    workoutSession = {
+      id: crypto.randomUUID(),
+      schemaVersion: 1,
+      startedAt: null,
+      exerciseIds: exercisePlan.filter(item => item.enabled).map(item => item.id),
+      exerciseCount: exercises.length,
+      rounds: totalRounds,
+      trainingSeconds,
+      restSeconds
+    };
+  }
   settingsLocked = true;
   updateSettings();
   prepareSound();
@@ -455,6 +472,7 @@ function pauseTimer() {
 }
 
 function resetTimer() {
+  workoutSession = null;
   settingsLocked = false;
   updateSettings();
   clearInterval(timerId);
@@ -490,6 +508,149 @@ document.addEventListener("visibilitychange", function () {
 updateSettings();
 updateDisplay();
 keepScreenAwake();
+
+// カレンダーは端末の現地日付、開始・終了日時はUTCで保存します。
+function localDateKey(date) {
+  return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0")
+    + "-" + String(date.getDate()).padStart(2, "0");
+}
+
+let workoutDatabase = null;
+function openWorkoutDatabase() {
+  if (workoutDatabase) return workoutDatabase;
+  workoutDatabase = new Promise((resolve, reject) => {
+    const request = indexedDB.open("motion-loop", 2);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains("completed-days")) {
+        request.result.createObjectStore("completed-days", { keyPath: "date" });
+      }
+      // 旧データは日付だけのまま残し、不明な種目数や時間を補いません。
+      if (!request.result.objectStoreNames.contains("workouts")) {
+        const store = request.result.createObjectStore("workouts", { keyPath: "id" });
+        store.createIndex("completedDate", "completedDate", { unique: false });
+      }
+    };
+    request.onsuccess = () => {
+      const database = request.result;
+      database.onversionchange = () => { database.close(); workoutDatabase = null; };
+      resolve(database);
+    };
+    request.onerror = () => reject(request.error);
+  }).catch(error => { workoutDatabase = null; throw error; });
+  return workoutDatabase;
+}
+
+let completionSaveFailed = false;
+async function recordWorkoutCompletion(date) {
+  if (!workoutSession || !workoutSession.startedAt) return;
+  // 保存待ちの間にリセットされても、完了した回の内容を保持します。
+  const intervalCount = workoutSession.exerciseCount * workoutSession.rounds;
+  const activeSeconds = intervalCount * workoutSession.trainingSeconds;
+  const completedRestSeconds = (intervalCount - 1) * workoutSession.restSeconds;
+  const record = {
+    ...workoutSession,
+    exerciseIds: [...workoutSession.exerciseIds],
+    completedDate: localDateKey(date),
+    endedAt: date.toISOString(),
+    endUtcOffsetMinutes: -date.getTimezoneOffset(),
+    activeSeconds,
+    completedRestSeconds,
+    // 分数は表示時に60で割ります。準備・一時停止・最後の休憩は含みません。
+    totalSeconds: activeSeconds + completedRestSeconds
+  };
+  try {
+    const database = await openWorkoutDatabase();
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(["completed-days", "workouts"], "readwrite");
+      transaction.oncomplete = resolve;
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+      transaction.objectStore("workouts").put(record);
+      transaction.objectStore("completed-days").put({ date: record.completedDate });
+    });
+    completionSaveFailed = false;
+  } catch (error) {
+    completionSaveFailed = true;
+    console.warn("完了日の保存ができませんでした。", error);
+  }
+  if (calendarDialog.open) renderCalendar();
+}
+
+const calendarDialog = document.getElementById("calendar-dialog");
+const calendarDays = document.getElementById("calendar-days");
+const calendarMessage = document.getElementById("calendar-message");
+let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let calendarRenderId = 0;
+
+async function renderCalendar() {
+  const renderId = ++calendarRenderId;
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+  document.getElementById("calendar-month").textContent = year + "年" + (month + 1) + "月";
+  calendarDays.replaceChildren();
+  calendarMessage.textContent = "読み込み中…";
+  const cells = new Map();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const dayCount = new Date(year, month + 1, 0).getDate();
+  const today = localDateKey(new Date());
+  let row;
+  for (let index = 0; index < Math.ceil((firstWeekday + dayCount) / 7) * 7; index++) {
+    if (index % 7 === 0) { row = document.createElement("tr"); calendarDays.append(row); }
+    const cell = document.createElement("td");
+    const day = index - firstWeekday + 1;
+    if (day >= 1 && day <= dayCount) {
+      const key = localDateKey(new Date(year, month, day));
+      cell.textContent = day;
+      cell.setAttribute("aria-label", key);
+      if (key === today) cell.setAttribute("aria-current", "date");
+      cells.set(key, cell);
+    }
+    row.append(cell);
+  }
+  try {
+    const database = await openWorkoutDatabase();
+    const dates = await new Promise((resolve, reject) => {
+      const transaction = database.transaction("completed-days", "readonly");
+      const range = IDBKeyRange.bound(localDateKey(new Date(year, month, 1)),
+        localDateKey(new Date(year, month, dayCount)));
+      const request = transaction.objectStore("completed-days").getAllKeys(range);
+      transaction.oncomplete = () => resolve(request.result);
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+    // 月を素早く切り替えた場合、古い読み込み結果を表示しません。
+    if (renderId !== calendarRenderId) return;
+    for (const date of dates) {
+      const cell = cells.get(date);
+      if (!cell) continue;
+      const dot = document.createElement("span");
+      dot.className = "completion-dot";
+      dot.textContent = "●";
+      dot.setAttribute("aria-hidden", "true");
+      cell.append(dot);
+      cell.setAttribute("aria-label", date + " トレーニング完了");
+    }
+    calendarMessage.textContent = completionSaveFailed ? "直前の完了日を保存できませんでした。" : "";
+  } catch (error) {
+    if (renderId === calendarRenderId) calendarMessage.textContent = "記録を読み込めませんでした。閉じてもう一度お試しください。";
+  }
+}
+
+document.getElementById("open-calendar").addEventListener("click", () => {
+  const today = new Date();
+  calendarMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  calendarDialog.showModal();
+  renderCalendar();
+});
+document.getElementById("close-calendar").addEventListener("click", () => calendarDialog.close());
+document.getElementById("previous-month").addEventListener("click", () => {
+  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+  renderCalendar();
+});
+document.getElementById("next-month").addEventListener("click", () => {
+  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+  renderCalendar();
+});
 
 // ローカル開発では通常の読み込みを保ち、?pwa=1 を付けたときに試せます。
 if ("serviceWorker" in navigator && (location.hostname !== "localhost"

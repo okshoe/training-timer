@@ -27,6 +27,17 @@ h1 { margin: 0; font-size: 21px; letter-spacing: 0.04em; }
 #open-settings, #close-settings { width: 44px; min-height: 44px; padding: 10px; border: none; background: transparent; color: var(--accent); display: grid; place-items: center; }
 #open-settings { position: absolute; right: 0; }
 #close-settings { font-size: 26px; }
+#open-calendar, #close-calendar { width: 44px; min-height: 44px; padding: 10px; border: none; background: transparent; color: var(--accent); display: grid; place-items: center; }
+#open-calendar { position: absolute; left: 0; }
+#close-calendar { font-size: 26px; }
+.calendar-navigation { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0; }
+.calendar-navigation button { width: 44px; min-height: 44px; padding: 4px; font-size: 24px; border: none; }
+#calendar-month { margin: 0; font-size: 16px; font-weight: bold; }
+.calendar { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 14px; }
+.calendar th { font-size: 12px; font-weight: normal; color: #596052; padding-bottom: 8px; }
+.calendar td { height: 48px; vertical-align: top; padding: 5px 0; }
+.calendar td[aria-current="date"] { background: var(--soft); border-radius: 10px; }
+.completion-dot { display: block; font-size: 8px; line-height: 12px; color: var(--accent); }
 dialog { width: min(340px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 20px; border: 1px solid var(--soft); border-radius: 24px; background: var(--card); color: var(--ink); box-shadow: 0 16px 48px #37412e25; }
 dialog::backdrop { background: #343c3355; }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; }
