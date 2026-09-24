@@ -165,7 +165,8 @@ try {
     restSeconds = 30;
   }
   if (localStorage.getItem("motion-loop-rounds") === "3") totalRounds = 3;
-  if (localStorage.getItem("motion-loop-illustration") === "female") illustration = "female";
+  const savedIllustration = localStorage.getItem("motion-loop-illustration");
+  if (["female", "rabbit"].includes(savedIllustration)) illustration = savedIllustration;
 } catch (error) {}
 
 function updateSettings() {
@@ -322,9 +323,12 @@ function updateDisplay() {
     exerciseDisplay.textContent = exercises[exerciseIndex];
   }
   // 休憩中は、次の種目名と画像をそろえて表示します。
-  const imagePath = illustration === "female"
-    ? exerciseImages[displayedIndex].replace(".svg", "_f.svg")
-    : exerciseImages[displayedIndex];
+  const illustrationSuffix = illustration === "female"
+    ? "_f"
+    : illustration === "rabbit"
+    ? "_r"
+    : "";
+  const imagePath = exerciseImages[displayedIndex].replace(".svg", illustrationSuffix + ".svg");
   if (exerciseImage.getAttribute("src") !== imagePath) {
     exerciseImage.setAttribute("src", imagePath);
   }
