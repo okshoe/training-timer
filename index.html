@@ -63,6 +63,12 @@
     </div>
     <ul id="exercise-list" aria-label="種目の選択と順番"></ul>
     <p class="settings-help" id="settings-help">設定は自動で保存されます。</p>
+    <div class="backup-actions">
+      <button id="backup-data" type="button">バックアップ</button>
+      <button id="restore-data" type="button">復元</button>
+      <input id="restore-file" type="file" accept="application/json,.json" hidden>
+    </div>
+    <p class="settings-help" id="backup-message" role="status"></p>
     <p class="app-version" id="app-version"></p>
   </dialog>
   <dialog id="calendar-dialog" aria-labelledby="calendar-title">

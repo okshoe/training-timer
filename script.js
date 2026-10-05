@@ -1,5 +1,5 @@
 // HTMLの表示やボタンを、idで取得します。
-const APP_VERSION = "1.01";
+const APP_VERSION = "1.02";
 document.getElementById("app-version").textContent = "Motion Loop v" + APP_VERSION;
 const timeDisplay = document.getElementById("time");
 const statusDisplay = document.getElementById("status");
@@ -153,6 +153,10 @@ let illustration = "male";
 let settingsLocked = false;
 const settingButtons = document.querySelectorAll(".choices button");
 const settingsDialog = document.getElementById("settings-dialog");
+const backupButton = document.getElementById("backup-data");
+const restoreButton = document.getElementById("restore-data");
+const restoreFileInput = document.getElementById("restore-file");
+const backupMessage = document.getElementById("backup-message");
 document.getElementById("open-settings").addEventListener("click", function () {
   settingsDialog.showModal();
 });
@@ -185,6 +189,8 @@ function updateSettings() {
     button.setAttribute("aria-pressed", String(selected));
     button.disabled = settingsLocked;
   });
+  backupButton.disabled = settingsLocked;
+  restoreButton.disabled = settingsLocked;
 }
 
 settingButtons.forEach(function (button) {
@@ -658,6 +664,174 @@ document.getElementById("previous-month").addEventListener("click", () => {
 document.getElementById("next-month").addEventListener("click", () => {
   calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
   renderCalendar();
+});
+
+function backupFileName() {
+  return "motion-loop-backup-" + localDateKey(new Date()) + ".json";
+}
+
+function setBackupMessage(message) {
+  backupMessage.textContent = message;
+}
+
+function downloadBackup(file) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(file);
+  link.download = file.name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
+async function readBackupData() {
+  const database = await openWorkoutDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(["completed-days", "workouts"], "readonly");
+    const completedDays = transaction.objectStore("completed-days").getAll();
+    const workouts = transaction.objectStore("workouts").getAll();
+    transaction.oncomplete = () => resolve({ completedDays: completedDays.result, workouts: workouts.result });
+    transaction.onabort = () => reject(transaction.error);
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+async function createBackup() {
+  if (settingsLocked) return;
+  setBackupMessage("バックアップを準備中…");
+  try {
+    const history = await readBackupData();
+    const backup = {
+      format: "motion-loop-backup",
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      settings: { exercisePlan, trainingSeconds, totalRounds, illustration },
+      completedDays: history.completedDays,
+      workouts: history.workouts
+    };
+    const file = new File([JSON.stringify(backup, null, 2)], backupFileName(), { type: "application/json" });
+    let canShareFile = false;
+    try {
+      canShareFile = typeof navigator.share === "function" && typeof navigator.canShare === "function"
+        && navigator.canShare({ files: [file] });
+    } catch (error) {}
+    if (canShareFile) {
+      try {
+        await navigator.share({ files: [file], title: "Motion Loop バックアップ" });
+        setBackupMessage("バックアップを共有しました。");
+      } catch (error) {
+        if (error.name === "AbortError") {
+          setBackupMessage("バックアップの共有をキャンセルしました。");
+        } else {
+          downloadBackup(file);
+          setBackupMessage("共有できなかったため、JSONファイルを保存しました。");
+        }
+      }
+    } else {
+      downloadBackup(file);
+      setBackupMessage("JSONファイルを保存しました。");
+    }
+  } catch (error) {
+    console.warn("バックアップを作成できませんでした。", error);
+    setBackupMessage("バックアップを作成できませんでした。");
+  }
+}
+
+function validBackupPlan(plan) {
+  if (!Array.isArray(plan)) return null;
+  const valid = plan.filter((item, index) => item && typeof item.enabled === "boolean"
+    && catalog.some(entry => entry.id === item.id)
+    && plan.findIndex(entry => entry && entry.id === item.id) === index);
+  if (!valid.some(item => item.enabled)) return null;
+  return valid.concat(catalog.filter(item => !valid.some(entry => entry.id === item.id))
+    .map(item => ({ id: item.id, enabled: false })));
+}
+
+function validateBackup(backup) {
+  if (!backup || backup.format !== "motion-loop-backup" || backup.schemaVersion !== 1
+    || !backup.settings || !Array.isArray(backup.completedDays) || !Array.isArray(backup.workouts)) return null;
+  const exercisePlan = validBackupPlan(backup.settings.exercisePlan);
+  if (!exercisePlan || ![30, 40].includes(backup.settings.trainingSeconds)
+    || ![2, 3].includes(backup.settings.totalRounds)
+    || !["male", "female", "rabbit"].includes(backup.settings.illustration)) return null;
+  const completedDays = backup.completedDays.filter(item => item && /^\d{4}-\d{2}-\d{2}$/.test(item.date));
+  const workouts = backup.workouts.filter(item => item && typeof item.id === "string" && item.id
+    && /^\d{4}-\d{2}-\d{2}$/.test(item.completedDate));
+  const workoutIds = new Set(workouts.map(item => item.id));
+  if (completedDays.length !== backup.completedDays.length || workouts.length !== backup.workouts.length
+    || workoutIds.size !== workouts.length) return null;
+  return { settings: { ...backup.settings, exercisePlan }, completedDays, workouts };
+}
+
+async function mergeBackup(backup) {
+  const database = await openWorkoutDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(["completed-days", "workouts"], "readwrite");
+    const workoutStore = transaction.objectStore("workouts");
+    const existingIds = workoutStore.getAllKeys();
+    let addedWorkouts = 0;
+    existingIds.onsuccess = () => {
+      const ids = new Set(existingIds.result);
+      backup.workouts.forEach(workout => {
+        if (!ids.has(workout.id)) {
+          workoutStore.add(workout);
+          addedWorkouts++;
+        }
+      });
+      const dayStore = transaction.objectStore("completed-days");
+      backup.completedDays.forEach(day => dayStore.put({ date: day.date }));
+      backup.workouts.forEach(workout => dayStore.put({ date: workout.completedDate }));
+    };
+    existingIds.onerror = () => reject(existingIds.error);
+    transaction.oncomplete = () => resolve(addedWorkouts);
+    transaction.onabort = () => reject(transaction.error);
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+function applyBackupSettings(settings) {
+  exercisePlan = settings.exercisePlan;
+  trainingSeconds = settings.trainingSeconds;
+  restSeconds = 60 - trainingSeconds;
+  totalRounds = settings.totalRounds;
+  illustration = settings.illustration;
+  applyExercisePlan();
+  try {
+    localStorage.setItem("motion-loop-exercises", JSON.stringify(exercisePlan));
+    localStorage.setItem("motion-loop-training", String(trainingSeconds));
+    localStorage.setItem("motion-loop-rounds", String(totalRounds));
+    localStorage.setItem("motion-loop-illustration", illustration);
+  } catch (error) {}
+  updateSettings();
+  updateDisplay();
+}
+
+async function restoreBackup(file) {
+  if (!file || settingsLocked) return;
+  setBackupMessage("バックアップを確認中…");
+  try {
+    const backup = validateBackup(JSON.parse(await file.text()));
+    if (!backup) {
+      setBackupMessage("Motion Loopのバックアップファイルではありません。");
+      return;
+    }
+    if (!confirm("設定を復元し、履歴を追加します。現在の履歴は削除されません。続けますか？")) {
+      setBackupMessage("復元をキャンセルしました。");
+      return;
+    }
+    const addedWorkouts = await mergeBackup(backup);
+    applyBackupSettings(backup.settings);
+    if (calendarDialog.open) renderCalendar();
+    setBackupMessage("復元しました。履歴を" + addedWorkouts + "件追加しました。");
+  } catch (error) {
+    console.warn("バックアップを復元できませんでした。", error);
+    setBackupMessage("復元できませんでした。ファイルを確認してください。");
+  }
+}
+
+backupButton.addEventListener("click", createBackup);
+restoreButton.addEventListener("click", () => restoreFileInput.click());
+restoreFileInput.addEventListener("change", () => {
+  restoreBackup(restoreFileInput.files[0]);
+  restoreFileInput.value = "";
 });
 
 // 起動時だけ更新を確認し、トレーニング中の更新は完了またはリセットまで保留します。
