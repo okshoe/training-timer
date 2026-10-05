@@ -1,5 +1,5 @@
 // HTMLの表示やボタンを、idで取得します。
-const APP_VERSION = "1.02";
+const APP_VERSION = "1.03";
 document.getElementById("app-version").textContent = "Motion Loop v" + APP_VERSION;
 const timeDisplay = document.getElementById("time");
 const statusDisplay = document.getElementById("status");
@@ -708,27 +708,8 @@ async function createBackup() {
       workouts: history.workouts
     };
     const file = new File([JSON.stringify(backup, null, 2)], backupFileName(), { type: "application/json" });
-    let canShareFile = false;
-    try {
-      canShareFile = typeof navigator.share === "function" && typeof navigator.canShare === "function"
-        && navigator.canShare({ files: [file] });
-    } catch (error) {}
-    if (canShareFile) {
-      try {
-        await navigator.share({ files: [file], title: "Motion Loop バックアップ" });
-        setBackupMessage("バックアップを共有しました。");
-      } catch (error) {
-        if (error.name === "AbortError") {
-          setBackupMessage("バックアップの共有をキャンセルしました。");
-        } else {
-          downloadBackup(file);
-          setBackupMessage("共有できなかったため、JSONファイルを保存しました。");
-        }
-      }
-    } else {
-      downloadBackup(file);
-      setBackupMessage("JSONファイルを保存しました。");
-    }
+    downloadBackup(file);
+    setBackupMessage("バックアップ完了");
   } catch (error) {
     console.warn("バックアップを作成できませんでした。", error);
     setBackupMessage("バックアップを作成できませんでした。");
