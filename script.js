@@ -1,4 +1,6 @@
 // HTMLの表示やボタンを、idで取得します。
+const APP_VERSION = "1.01";
+document.getElementById("app-version").textContent = "Motion Loop v" + APP_VERSION;
 const timeDisplay = document.getElementById("time");
 const statusDisplay = document.getElementById("status");
 const exerciseDisplay = document.getElementById("exercise");
@@ -372,6 +374,7 @@ function nextPhase(announce = true) {
       statusDisplay.textContent = "すべて終了！";
       document.body.dataset.phase = "finished";
       statusDisplay.className = "";
+      applyWaitingServiceWorker();
       return;
     }
     isRest = true;
@@ -494,6 +497,7 @@ function resetTimer() {
   statusDisplay.textContent = "開始前";
   document.body.dataset.phase = "idle";
   statusDisplay.className = "";
+  applyWaitingServiceWorker();
 }
 
 // ボタンが押されたときに、対応する関数を実行します。
@@ -656,10 +660,54 @@ document.getElementById("next-month").addEventListener("click", () => {
   renderCalendar();
 });
 
+// 起動時だけ更新を確認し、トレーニング中の更新は完了またはリセットまで保留します。
+let waitingServiceWorker = null;
+let reloadForServiceWorkerUpdate = false;
+let reloadedForServiceWorkerUpdate = false;
+
+function canApplyServiceWorkerUpdate() {
+  return !settingsLocked || (remainingTime === 0 && timerId === null);
+}
+
+function applyWaitingServiceWorker() {
+  if (!waitingServiceWorker || !canApplyServiceWorkerUpdate()) return;
+  // 初回インストールでは再読み込みせず、更新時だけcontrollerchange後に読み込み直します。
+  reloadForServiceWorkerUpdate = navigator.serviceWorker.controller !== null;
+  waitingServiceWorker.postMessage({ type: "SKIP_WAITING" });
+  waitingServiceWorker = null;
+}
+
+function watchServiceWorkerInstallation(registration) {
+  const installingWorker = registration.installing;
+  if (!installingWorker) return;
+  installingWorker.addEventListener("statechange", function () {
+    if (installingWorker.state === "installed" && registration.waiting) {
+      waitingServiceWorker = registration.waiting;
+      applyWaitingServiceWorker();
+    }
+  });
+}
+
 // ローカル開発では通常の読み込みを保ち、?pwa=1 を付けたときに試せます。
 if ("serviceWorker" in navigator && (location.hostname !== "localhost"
   && location.hostname !== "127.0.0.1" || new URLSearchParams(location.search).has("pwa"))) {
-  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(error => {
+  navigator.serviceWorker.addEventListener("controllerchange", function () {
+    if (reloadForServiceWorkerUpdate && !reloadedForServiceWorkerUpdate) {
+      reloadedForServiceWorkerUpdate = true;
+      location.reload();
+    }
+  });
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(registration => {
+    registration.addEventListener("updatefound", function () {
+      watchServiceWorkerInstallation(registration);
+    });
+    if (registration.waiting) waitingServiceWorker = registration.waiting;
+    watchServiceWorkerInstallation(registration);
+    applyWaitingServiceWorker();
+    return registration.update();
+  }).then(() => {
+    applyWaitingServiceWorker();
+  }).catch(error => {
     console.warn("オフラインの準備ができませんでした。", error);
   });
 }

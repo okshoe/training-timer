@@ -1,17 +1,19 @@
 // 公開する内容を変更したら、このバージョンも変更します。
 const CACHE_PREFIX = "motion-loop-" + self.registration.scope;
-const CACHE_NAME = CACHE_PREFIX + "v6";
+const CACHE_NAME = CACHE_PREFIX + "v7";
 const exercises = ["squat", "wall-pushup", "back-lunge", "side-lunge",
   "bird-dog", "hip-bridge", "dead-bug", "side-plank"];
 const files = ["./", "index.html", "style.css", "script.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png",
   "icons/favicon-32.png", "icons/favicon-16.png", "icons/apple-touch-icon.png",
-  ...exercises.flatMap(id => ["assets/" + id + ".svg", "assets/" + id + "_f.svg"])];
+  ...exercises.flatMap(id => ["assets/" + id + ".svg", "assets/" + id + "_f.svg", "assets/" + id + "_r.svg"])];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache =>
     cache.addAll(files.map(file => new Request(new URL(file, self.registration.scope), { cache: "reload" })))));
-  // skipWaitingしないことで、使用中のトレーニングを更新で中断しません。
+});
+self.addEventListener("message", event => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 self.addEventListener("activate", event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys
